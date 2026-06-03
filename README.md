@@ -190,6 +190,19 @@ python scripts/build_index.py --model clip --include-excluded
 python scripts/doctor.py
 
 # 8. Launch the web server
+# 3. Add datasets to data/raw/ (see Datasets & Attribution above)
+python scripts/doctor.py
+
+# 4. Optional: verify ingestion without generating embeddings
+python scripts/build_index.py --data-dir data/raw/<your_dataset> --dry-run
+
+# 5. Build the embedding index
+python scripts/build_index.py --model clip --include-excluded
+
+# 6. Confirm the index is ready
+python scripts/doctor.py
+
+# 7. Launch the web server
 uvicorn app.server:app --reload --port 8000
 ```
 

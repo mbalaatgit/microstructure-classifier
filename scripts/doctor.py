@@ -79,6 +79,16 @@ def _cpu_feature_summary() -> str:
     flags = set(flags_line.split())
     supported = [flag for flag in ["sse4_2", "avx", "avx2", "avx512f"] if flag in flags]
     return f"{platform.machine()} ({', '.join(supported) if supported else 'no AVX flags found'})"
+def _check_import(module_name: str) -> tuple[bool, str]:
+    try:
+        __import__(module_name)
+        return True, "ok"
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _status(flag: bool) -> str:
+    return "OK" if flag else "MISSING"
 
 
 def main() -> int:
@@ -109,6 +119,20 @@ def main() -> int:
     dependency_failures = 0
     for package_name, _import_name, checker in dependency_checks:
         ok, detail = checker()
+
+    print("\nPython dependencies")
+    dependency_names = [
+        ("torch", "torch"),
+        ("torchvision", "torchvision"),
+        ("open_clip", "open-clip-torch"),
+        ("faiss", "faiss-cpu"),
+        ("fastapi", "fastapi"),
+        ("PIL", "Pillow"),
+        ("numpy", "numpy"),
+    ]
+    dependency_failures = 0
+    for import_name, package_name in dependency_names:
+        ok, detail = _check_import(import_name)
         dependency_failures += 0 if ok else 1
         print(f"  {_status(ok):8} {package_name:18} {detail}")
 
