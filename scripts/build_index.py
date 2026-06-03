@@ -8,7 +8,9 @@ Usage:
     python scripts/build_index.py --data-dir /path/to/custom/images
 """
 import argparse
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Add project root to path
@@ -45,6 +47,11 @@ def main():
         action="store_true",
         help="Include excluded/low-quality images (more data for similarity search)",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Load and summarize records without embedding images or writing an index",
+    )
     args = parser.parse_args()
     
     # ── Load data ────────────────────────────────────────────────────────
@@ -61,7 +68,12 @@ def main():
         print("\nERROR: No images found!")
         print("Please download datasets first. See README.md for instructions.")
         print(f"Expected data in: {config.RAW_DIR}")
+        print("Tip: for a quick proof-of-life build, pass --data-dir /path/to/folder/of/images")
         sys.exit(1)
+
+    if args.dry_run:
+        print("\nDry run complete: records loaded successfully; no embeddings/index written.")
+        return
     
     # ── Generate embeddings ──────────────────────────────────────────────
     print(f"\n{'=' * 60}")
@@ -105,6 +117,29 @@ def main():
     print("=" * 60)
     
     index.save()
+
+    manifest = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "model": args.model,
+        "embedding_dim": int(embeddings.shape[1]),
+        "metric": config.SIMILARITY_METRIC,
+        "count": int(index.size),
+        "index_path": str(config.FAISS_INDEX_PATH),
+        "metadata_path": str(config.METADATA_PATH),
+        "data_dir": str(args.data_dir) if args.data_dir else str(config.RAW_DIR),
+        "include_excluded": bool(args.include_excluded),
+        "sources": {},
+        "labels": {},
+    }
+    for meta in metadata_list:
+        source = meta.get("source", "unknown")
+        label = meta.get("label", "unknown")
+        manifest["sources"][source] = manifest["sources"].get(source, 0) + 1
+        manifest["labels"][label] = manifest["labels"].get(label, 0) + 1
+
+    config.INDEX_MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    config.INDEX_MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    print(f"Saved index manifest to {config.INDEX_MANIFEST_PATH}")
     
     print(f"\nDone! Index contains {index.size} microstructures.")
     print(f"Query with: python scripts/query.py --image <path>")

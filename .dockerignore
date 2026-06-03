@@ -1,0 +1,15 @@
+.git
+__pycache__/
+*.pyc
+.venv/
+venv/
+mcvenv/
+.ipynb_checkpoints/
+
+# Large runtime artifacts should be mounted or copied intentionally.
+data/raw/
+data/processed/
+data/embeddings/
+data/models/
+query_results.png
+*.log

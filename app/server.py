@@ -18,6 +18,7 @@ Usage:
 """
 import io
 import sys
+import json
 import base64
 import tempfile
 from pathlib import Path
@@ -1253,6 +1254,17 @@ def _find_closest_known_phase(label: str) -> str | None:
     return None
 
 
+def _load_index_manifest() -> dict | None:
+    """Return reproducibility metadata for the current index, if available."""
+    if not config.INDEX_MANIFEST_PATH.exists():
+        return None
+
+    try:
+        return json.loads(config.INDEX_MANIFEST_PATH.read_text())
+    except Exception as e:
+        return {"error": f"Could not read index manifest: {type(e).__name__}: {e}"}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # API ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1261,11 +1273,17 @@ def _find_closest_known_phase(label: str) -> str | None:
 async def health():
     has_text_search = hasattr(embedder, "embed_text") if embedder else False
     has_zero_shot = hasattr(embedder, "classify_zero_shot") if embedder else False
+    manifest = _load_index_manifest()
+    manifest_model = manifest.get("model") if manifest else None
     return {
         "status": "ok",
         "model": config.EMBEDDING_MODEL,
         "index_loaded": index is not None,
         "index_size": index.size if index else 0,
+        "index_manifest": manifest,
+        "index_model_matches_runtime": (
+            manifest_model is None or manifest_model == config.EMBEDDING_MODEL
+        ),
         "text_search": has_text_search,
         "zero_shot": has_zero_shot,
     }
