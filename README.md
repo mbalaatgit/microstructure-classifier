@@ -150,10 +150,12 @@ microstructure-classifier/
 │   └── utils.py               # Image preprocessing and visualization
 ├── scripts/
 │   ├── build_index.py         # Embed all images and build FAISS index
+│   ├── doctor.py              # Preflight check for dependencies, data, and index readiness
 │   └── query.py               # CLI similarity search
+├── docs/
+│   └── reproducible_setup.md  # Repeatable setup, indexing, and deployment workflow
 ├── config.py                  # Paths, model settings, hyperparameters
-├── prebake_thumbnails.py      # Generate base64 thumbnails for HF Spaces deployment
-├── Dockerfile                 # Container config for Hugging Face Spaces
+├── Dockerfile                 # Container config for deployment
 ├── requirements.txt
 └── tests/
 ```
@@ -172,18 +174,22 @@ python -m venv venv && source venv/bin/activate  # or venv\Scripts\Activate.ps1 
 pip install -r requirements.txt
 
 # 3. Add datasets to data/raw/ (see Datasets & Attribution above)
+python scripts/doctor.py
 
-# 4. Build the embedding index
+# 4. Optional: verify ingestion without generating embeddings
+python scripts/build_index.py --data-dir data/raw/<your_dataset> --dry-run
+
+# 5. Build the embedding index
 python scripts/build_index.py --model clip --include-excluded
 
-# 5. Pre-bake thumbnails (needed for HF Spaces deployment)
-python prebake_thumbnails.py
+# 6. Confirm the index is ready
+python scripts/doctor.py
 
-# 6. Launch the web server
+# 7. Launch the web server
 uvicorn app.server:app --reload --port 8000
 ```
 
-Open [http://localhost:8000](http://localhost:8000).
+Open [http://localhost:8000](http://localhost:8000). See [`docs/reproducible_setup.md`](docs/reproducible_setup.md) for the full repeatable indexing and Docker workflow.
 
 ### CLI Search
 
