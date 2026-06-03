@@ -24,6 +24,41 @@ python scripts/doctor.py
 The doctor reports dependency status, configured paths, raw image counts, whether
 `microstructure.index` and `metadata.pkl` exist, and the exact next commands to run.
 
+
+## FAISS / NumPy compatibility and illegal-instruction checks
+
+`requirements.txt` intentionally keeps FAISS and NumPy in compatible major-version
+ranges: `faiss-cpu>=1.9.0,<2.0` and `numpy>=1.25,<3.0`. The older loose
+combination `faiss-cpu>=1.7.4` plus unbounded NumPy could resolve to a wheel set
+that was not validated for the local CPU/Python combination.
+
+Before spending time building embeddings, run:
+
+```bash
+python scripts/doctor.py
+```
+
+The doctor runs the FAISS + NumPy smoke test in a subprocess. If FAISS terminates
+with `SIGILL / illegal instruction`, the doctor reports that instead of crashing
+the main process. That usually means the installed binary wheel is using CPU
+instructions unavailable on the host or VM. In that case, try one of these
+installation paths before indexing:
+
+```bash
+pip uninstall -y faiss-cpu
+pip install --upgrade --force-reinstall "numpy>=1.25,<3.0" "faiss-cpu>=1.9.0,<2.0"
+```
+
+If the PyPI wheel still raises `SIGILL`, prefer a conda-forge FAISS build for
+that machine:
+
+```bash
+conda install -c conda-forge faiss-cpu numpy
+```
+
+Re-run `python scripts/doctor.py` after changing FAISS/NumPy. Only build the
+embeddings once the `faiss-cpu + numpy` check reports `smoke=ok`.
+
 ## 2. Add images
 
 For the built-in loaders, place data under:

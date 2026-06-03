@@ -4,14 +4,14 @@ torchvision>=0.15
 open-clip-torch>=2.20.0      # CLIP embeddings (optional, can use ResNet instead)
 
 # Vector search
-faiss-cpu>=1.7.4              # Use faiss-gpu if you have CUDA
+faiss-cpu>=1.9.0,<2.0          # Modern PyPI wheels support NumPy 2.x; use conda-forge if your CPU hits SIGILL
 
 # Image processing
 Pillow>=10.0
 scikit-image>=0.21
 
 # Data handling
-numpy>=1.24
+numpy>=1.25,<3.0
 pandas>=2.0
 sqlalchemy>=2.0              # For UHCS SQLite metadata
 

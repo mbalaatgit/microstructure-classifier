@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Preflight checks for local deployment and index readiness."""
 import json
+import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +13,72 @@ import config
 from src.utils import collect_image_paths
 
 
+def _status(flag: bool) -> str:
+    return "OK" if flag else "MISSING"
+
+
+def _run_python_check(code: str, timeout: int = 20) -> tuple[bool, str]:
+    """Run a dependency check in a subprocess so SIGILL cannot kill doctor.py."""
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+    )
+
+    output = (proc.stdout + proc.stderr).strip()
+    if proc.returncode == 0:
+        return True, output or "ok"
+
+    if proc.returncode < 0:
+        signal_number = -proc.returncode
+        signal_name = "SIGILL / illegal instruction" if signal_number == 4 else f"signal {signal_number}"
+        return False, f"terminated by {signal_name}. {output}".strip()
+
+    return False, output or f"exit code {proc.returncode}"
+
+
+def _check_dependency(import_name: str, version_attr: str = "__version__") -> tuple[bool, str]:
+    code = f"""
+import importlib
+module = importlib.import_module({import_name!r})
+print(getattr(module, {version_attr!r}, 'version unavailable'))
+"""
+    return _run_python_check(code)
+
+
+def _check_faiss_numpy() -> tuple[bool, str]:
+    code = """
+import faiss
+import numpy as np
+idx = faiss.IndexFlatIP(3)
+vectors = np.eye(3, dtype='float32')
+idx.add(vectors)
+distances, indices = idx.search(vectors[:1], 1)
+assert indices[0, 0] == 0
+assert distances[0, 0] > 0.99
+print(f"faiss={getattr(faiss, '__version__', 'unknown')} numpy={np.__version__} smoke=ok")
+"""
+    return _run_python_check(code)
+
+
+def _cpu_feature_summary() -> str:
+    if platform.machine().lower() not in {"x86_64", "amd64"}:
+        return f"{platform.machine()} (non-x86; AVX flags not applicable)"
+
+    cpuinfo = Path("/proc/cpuinfo")
+    if not cpuinfo.exists():
+        return f"{platform.machine()} (CPU flags unavailable)"
+
+    flags_line = ""
+    for line in cpuinfo.read_text(errors="ignore").splitlines():
+        if line.startswith("flags"):
+            flags_line = line
+            break
+
+    flags = set(flags_line.split())
+    supported = [flag for flag in ["sse4_2", "avx", "avx2", "avx512f"] if flag in flags]
+    return f"{platform.machine()} ({', '.join(supported) if supported else 'no AVX flags found'})"
 def _check_import(module_name: str) -> tuple[bool, str]:
     try:
         __import__(module_name)
@@ -36,6 +104,21 @@ def main() -> int:
     print(f"  manifest path:      {config.INDEX_MANIFEST_PATH}")
     print(f"  server model:       {config.EMBEDDING_MODEL}")
     print(f"  similarity metric:  {config.SIMILARITY_METRIC}")
+    print(f"  CPU features:       {_cpu_feature_summary()}")
+
+    print("\nPython dependencies")
+    dependency_checks = [
+        ("torch", "torch", lambda: _check_dependency("torch")),
+        ("torchvision", "torchvision", lambda: _check_dependency("torchvision")),
+        ("open-clip-torch", "open_clip", lambda: _check_dependency("open_clip")),
+        ("faiss-cpu + numpy", "faiss/numpy", _check_faiss_numpy),
+        ("fastapi", "fastapi", lambda: _check_dependency("fastapi")),
+        ("Pillow", "PIL", lambda: _check_dependency("PIL", "__version__")),
+        ("numpy", "numpy", lambda: _check_dependency("numpy")),
+    ]
+    dependency_failures = 0
+    for package_name, _import_name, checker in dependency_checks:
+        ok, detail = checker()
 
     print("\nPython dependencies")
     dependency_names = [

@@ -173,6 +173,23 @@ python -m venv venv && source venv/bin/activate  # or venv\Scripts\Activate.ps1 
 # 2. Install dependencies
 pip install -r requirements.txt
 
+# 3. Validate dependency compatibility before indexing
+python scripts/doctor.py
+
+# 4. Add datasets to data/raw/ (see Datasets & Attribution above)
+mkdir -p data/raw/welding_electrodes
+# copy your micrograph folders/images into data/raw/welding_electrodes/
+
+# 5. Optional: verify ingestion without generating embeddings
+python scripts/build_index.py --data-dir data/raw/welding_electrodes --dry-run
+
+# 6. Build the embedding index
+python scripts/build_index.py --model clip --include-excluded
+
+# 7. Confirm the index is ready
+python scripts/doctor.py
+
+# 8. Launch the web server
 # 3. Add datasets to data/raw/ (see Datasets & Attribution above)
 python scripts/doctor.py
 
